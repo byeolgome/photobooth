@@ -797,9 +797,26 @@ async function shootSequence(indices){
 
   for(const idx of indices){
     S.currentShot=idx; updateProgress();
+    
+    // 1. 카운트다운 진행
     await countdown(5);
+    
+    // 2. 사진 찍기 직전에 화면을 하얗게 만들어서 얼굴에 빛 쏘기!
+    if(S.flashOn) {
+      flashEl.classList.add('flash');
+      await sleep(150); // 하얀 빛이 얼굴에 닿을 시간 아주 잠깐(0.15초) 기다림
+    }
+
+    // 3. 얼굴이 환해진 그 순간 찰칵! 찍기
     const url=capturePhoto();
-    await triggerFlash(); playShutter();
+    playShutter();
+
+    // 4. 플래시 효과 끄기
+    if(S.flashOn) {
+      flashEl.classList.remove('flash');
+      await sleep(80); // 눈부심 잔상 대기
+    }
+    
     S.photos[idx]=url; updateThumbs(); updateProgress();
     await sleep(480);
   }
