@@ -59,7 +59,7 @@ body::before {
 
 /* ── CAMERA ── */
 .camera-wrapper {
-  position:relative; width:100%; aspect-ratio:3/4;
+  position:relative; width:100%; aspect-ratio:540/400;
   border-radius:16px; overflow:hidden; background:#c0d8f0;
   box-shadow:0 0 0 1.5px rgba(160,200,230,0.5), 0 8px 28px rgba(120,180,220,0.18);
 }
@@ -152,7 +152,7 @@ body::before {
 /* ── THUMBS ── */
 .thumb-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:5px; width:100%; }
 .thumb-item {
-  position:relative; aspect-ratio:3/4; border-radius:7px; overflow:hidden;
+  position:relative; aspect-ratio:540/400; border-radius:7px; overflow:hidden;
   border:1px solid rgba(160,200,230,0.38); background:rgba(210,230,245,0.45);
   cursor:pointer; transition:all .25s;
 }
@@ -688,13 +688,40 @@ function updateThumbs(){
 //  CAPTURE
 // ═══════════════════════════════════════════
 function capturePhoto(){
-  const vw=video.videoWidth||640, vh=video.videoHeight||480;
-  capCanvas.width=vw; capCanvas.height=vh;
-  const ctx=capCanvas.getContext('2d');
-  ctx.save(); ctx.translate(vw,0); ctx.scale(-1,1);
-  ctx.drawImage(video,0,0,vw,vh); ctx.restore();
-  if(S.filterOn) applyY2K(ctx,vw,vh);
-  return capCanvas.toDataURL('image/jpeg',.93);
+  const vw = video.videoWidth || 640;
+  const vh = video.videoHeight || 480;
+
+  // 찍히는 사진과 화면에 보이는 비율을 540/400으로 완벽하게 똑같이 맞춤
+  const targetRatio = 540 / 400;
+  const videoRatio = vw / vh;
+
+  let cropW = vw;
+  let cropH = vh;
+  let startX = 0;
+  let startY = 0;
+
+  if (videoRatio > targetRatio) {
+    cropW = vh * targetRatio;
+    startX = (vw - cropW) / 2;
+  } else {
+    cropH = vw / targetRatio;
+    startY = (vh - cropH) / 2;
+  }
+
+  capCanvas.width = cropW;
+  capCanvas.height = cropH;
+
+  const ctx = capCanvas.getContext('2d');
+  ctx.save();
+  ctx.translate(cropW, 0);
+  ctx.scale(-1, 1);
+  
+  ctx.drawImage(video, startX, startY, cropW, cropH, 0, 0, cropW, cropH);
+  ctx.restore();
+
+  if(S.filterOn) applyY2K(ctx, cropW, cropH);
+  
+  return capCanvas.toDataURL('image/jpeg', .93);
 }
 
 function applyY2K(ctx,w,h){
