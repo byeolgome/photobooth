@@ -418,12 +418,14 @@ input[type=text]:focus { border-color:#80c0e0; box-shadow:0 0 0 3px rgba(128,192
         <button class="btn btn-sm" id="btnUndo">↩ Undo</button>
         <button class="btn btn-sm" id="btnClear">✕ Clear</button>
         <span class="panel-label">Size</span>
+      <div class="panel-row">
+        <button class="btn btn-sm" id="btnUndo">↩ Undo</button>
+        <button class="btn btn-sm" id="btnClear">✕ Clear</button>
+        <span class="panel-label">Size</span>
         <input type="range" id="stickerSize" min="30" max="150" value="70">
+        <span class="panel-label" style="margin-left:12px">Y2K 화질</span>
+        <input type="range" id="y2kSlider" min="0" max="100" value="50">
       </div>
-      <div style="font-size:.52rem; color:var(--text-light); letter-spacing:1px; text-align:center; margin-top:-2px;">
-        tap sticker → tap photo to place
-      </div>
-    </div>
 
     <div class="controls">
       <button class="btn btn-primary" id="btnShare2">⬡ Share</button>
@@ -731,33 +733,26 @@ function capturePhoto(){
 function applyY2K(ctx, w, h){
   const str = S.filterStr;
   
-  // 1. 밀키 톤 베이스 (Milky Tone)
+  // 1. 뽀샤시한 밀키 톤 베이스만 남김 (노이즈 X)
   ctx.fillStyle = `rgba(240, 248, 255, ${0.15 * str})`;
   ctx.fillRect(0, 0, w, h);
 
-  // 2. 빛 번짐 & 소프트 포커스 (Light Bloom)
+  // 2. 얼굴 예뻐 보이는 플래시 조명 유지
   ctx.save();
-  ctx.globalCompositeOperation = 'screen'; 
-  ctx.globalAlpha = 0.65 * str;
-  ctx.filter = `blur(${8 * str}px) brightness(1.1)`; 
-  ctx.drawImage(ctx.canvas, 0, 0, w, h);
-  ctx.restore();
-
-  // 3. 강한 플래시 조명 (Overexposed Highlights)
-  ctx.save();
-  ctx.globalCompositeOperation = 'overlay';
-  const flashLighting = ctx.createRadialGradient(w/2, h/2.5, 0, w/2, h/2.5, w * 0.7);
+  ctx.globalCompositeOperation = 'screen';
+  const flashLighting = ctx.createRadialGradient(w/2, h/3.5, 0, w/2, h/3.5, w * 0.7);
   flashLighting.addColorStop(0, `rgba(255, 255, 255, ${0.5 * str})`); 
   flashLighting.addColorStop(1, 'rgba(255, 255, 255, 0)');
   ctx.fillStyle = flashLighting;
   ctx.fillRect(0, 0, w, h);
   ctx.restore();
 
-  // 4. 레트로 디카 미세 노이즈
-  ctx.fillStyle = `rgba(255, 255, 255, ${0.08 * str})`;
-  for(let i=0; i< (1000 * str); i++){
-    ctx.fillRect(Math.random()*w, Math.random()*h, 1, 1);
-  }
+  // 3. 전체적인 밝기 보정
+  ctx.save();
+  ctx.globalCompositeOperation = 'overlay';
+  ctx.fillStyle = `rgba(255, 255, 255, ${0.1 * str})`;
+  ctx.fillRect(0, 0, w, h);
+  ctx.restore();
 }
 
 // ═══════════════════════════════════════════
@@ -937,21 +932,15 @@ function loadImg(src){
 }
 
 async function buildResult(){
-  // Canvas dimensions
-  const TW=600, TH=1800;
+  const TW=600, TH=3200; 
   const PAD=30, GAP=20;
-  // Photo area: 4 photos each 600×400 (as specified)
-  // But we need to fit logo + 4×400 + 3×20 + caption
-  // 4×400 + 3×20 = 1660; + PAD top(30) + PAD bot(30) = 1720; leaves 80px for logo+caption
-  // Better: logo=80px, photos start at y=110, caption at bottom 50px
+  
   const LOGO_H = 80;
   const LOGO_Y = 15;
-  const PHOTO_Y_START = LOGO_Y + LOGO_H + 10; // y=105
-  const PHOTO_W = TW - PAD*2;                  // 540
-  const PHOTO_H = 400;
-  const CAPTION_Y = PHOTO_Y_START + 4*(PHOTO_H+GAP) - GAP; // after last photo
-  // Total photos height: 4*400 + 3*20 = 1660; caption at y=105+1660=1765
-  // TH=1800, so 35px left for caption — tight but ok
+  const PHOTO_Y_START = LOGO_Y + LOGO_H + 10; 
+  const PHOTO_W = TW - PAD*2; 
+  const PHOTO_H = 720;        
+  const CAPTION_Y = PHOTO_Y_START + 4*(PHOTO_H+GAP) - GAP; 
 
   resCanvas.width=TW; resCanvas.height=TH;
   stkCanvas.width=TW; stkCanvas.height=TH;
@@ -959,36 +948,68 @@ async function buildResult(){
   const ctx=resCanvas.getContext('2d');
 
   // ── 1. FRAME BACKGROUND ──
-  const frameImg=await loadImg(FRAME_SRC);
-  ctx.drawImage(frameImg,0,0,TW,TH);
+  if(FRAME_SRC) {
+    const frameImg=await loadImg(FRAME_SRC);
+    ctx.drawImage(frameImg,0,0,TW,TH);
+  } else {
+    ctx.fillStyle = '#eaf4ff';
+    ctx.fillRect(0, 0, TW, TH);
+  }
 
   // ── 2. LOGO ──
   const logoEl=document.getElementById('logoImg');
-  const logoW=Math.round(LOGO_H*(logoEl.naturalWidth/logoEl.naturalHeight));
-  ctx.drawImage(logoEl,(TW-logoW)/2,LOGO_Y,logoW,LOGO_H);
+  if(logoEl && logoEl.src) {
+    const logoW=Math.round(LOGO_H*(logoEl.naturalWidth/logoEl.naturalHeight));
+    if(logoW > 0) ctx.drawImage(logoEl,(TW-logoW)/2,LOGO_Y,logoW,LOGO_H);
+  }
 
-  // ── 3. PHOTOS ──
+  // ── 3. PHOTOS (사진 먼저 그리기) ──
   for(let i=0;i<4;i++){
     const px=PAD;
     const py=PHOTO_Y_START + i*(PHOTO_H+GAP);
 
     if(S.photos[i]){
       const img=await loadImg(S.photos[i]);
-      // subtle white border glow
       ctx.save();
       ctx.shadowColor='rgba(255,255,255,0.7)'; ctx.shadowBlur=10;
       ctx.strokeStyle='rgba(255,255,255,0.55)'; ctx.lineWidth=1.5;
       ctx.strokeRect(px,py,PHOTO_W,PHOTO_H);
       ctx.restore();
-      // draw photo cropped to exact rect
       ctx.drawImage(img,px,py,PHOTO_W,PHOTO_H);
     } else {
-      // empty slot
       ctx.fillStyle='rgba(180,215,240,0.25)';
       ctx.fillRect(px,py,PHOTO_W,PHOTO_H);
       ctx.fillStyle='rgba(160,200,230,0.45)';
       ctx.font='11px monospace'; ctx.textAlign='center';
       ctx.fillText('[empty]',TW/2,py+PHOTO_H/2);
+    }
+  }
+
+  // ⭐⭐⭐ [핵심] Y2K 슬라이더 값에 따라 화질 구지게 덧씌우기 ⭐⭐⭐
+  const y2kSlider = document.getElementById('y2kSlider');
+  if(y2kSlider) {
+    const y2kVal = y2kSlider.value / 100;
+    if(y2kVal > 0) {
+      for(let i=0;i<4;i++){
+        if(!S.photos[i]) continue;
+        const px=PAD, py=PHOTO_Y_START + i*(PHOTO_H+GAP);
+        
+        // 빛 바랜 빈티지 색감 얹기
+        ctx.fillStyle = `rgba(0, 0, 30, ${0.15 * y2kVal})`;
+        ctx.fillRect(px, py, PHOTO_W, PHOTO_H);
+        
+        ctx.globalCompositeOperation = 'screen';
+        ctx.fillStyle = `rgba(255, 150, 100, ${0.08 * y2kVal})`;
+        ctx.fillRect(px, py, PHOTO_W, PHOTO_H);
+        ctx.globalCompositeOperation = 'source-over';
+        
+        // 자글자글한 옛날 디카 노이즈
+        ctx.fillStyle = `rgba(255, 255, 255, ${0.15 * y2kVal})`;
+        const grainCount = Math.floor(4000 * y2kVal);
+        for(let j=0; j<grainCount; j++){
+          ctx.fillRect(px + Math.random()*PHOTO_W, py + Math.random()*PHOTO_H, 2, 2);
+        }
+      }
     }
   }
 
@@ -1003,27 +1024,38 @@ async function buildResult(){
 
   if(caption){
     ctx.fillStyle='rgba(255,255,255,0.9)';
-    ctx.font='bold 14px "Space Mono",monospace';
-    ctx.fillText(caption, TW/2, CAPTION_Y+18);
+    ctx.font='bold 20px "Space Mono",monospace';
+    ctx.fillText(caption, TW/2, CAPTION_Y+30);
     ctx.fillStyle='rgba(255,255,255,0.6)';
-    ctx.font='10px "Space Mono",monospace';
-    ctx.fillText(dateStr, TW/2, CAPTION_Y+34);
+    ctx.font='14px "Space Mono",monospace';
+    ctx.fillText(dateStr, TW/2, CAPTION_Y+60);
   } else {
     ctx.fillStyle='rgba(255,255,255,0.7)';
-    ctx.font='11px "Space Mono",monospace';
-    ctx.fillText(dateStr, TW/2, CAPTION_Y+22);
+    ctx.font='16px "Space Mono",monospace';
+    ctx.fillText(dateStr, TW/2, CAPTION_Y+40);
   }
   ctx.restore();
 
   // ── 5. MADE BY ──
   ctx.save();
   ctx.fillStyle='rgba(255,255,255,0.32)';
-  ctx.font='7px "Space Mono",monospace';
+  ctx.font='10px "Space Mono",monospace';
   ctx.textAlign='center';
   ctx.letterSpacing='2px';
-  ctx.fillText('made by byeolgom', TW/2, TH-8);
+  ctx.fillText('made by byeolgom', TW/2, TH-20);
   ctx.restore();
 }
+
+// ✨ Y2K 슬라이더 움직일 때마다 즉시 적용되게 연결!
+setTimeout(() => {
+  const y2kEl = document.getElementById('y2kSlider');
+  if(y2kEl) {
+    y2kEl.addEventListener('input', async () => {
+      await buildResult();
+      drawStickers();
+    });
+  }
+}, 500);
 
 // ═══════════════════════════════════════════
 //  MERGED EXPORT
