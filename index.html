@@ -615,15 +615,19 @@ async function initCam(){
 //  FILTER
 // ═══════════════════════════════════════════
 function applyFilterUI(){
-  const on=S.filterOn;
-  document.getElementById('filterOverlay').classList.toggle('on',on);
-  document.getElementById('grainOverlay').classList.toggle('on',on);
-  document.getElementById('vignetteOverlay').classList.toggle('on',on);
-  document.getElementById('tsEl').classList.toggle('on',on);
-  const str=S.filterStr;
-  video.style.filter=on
-    ?`contrast(${1+str*.32}) brightness(${1+str*.1}) saturate(${1-str*.14})`
-    :'';
+  const on = S.filterOn;
+  const str = S.filterStr;
+  
+  document.getElementById('filterOverlay').classList.toggle('on', on);
+  document.getElementById('tsEl').classList.toggle('on', on);
+  document.getElementById('grainOverlay').classList.remove('on');
+  document.getElementById('vignetteOverlay').classList.remove('on');
+  
+  // 밀키톤 & 과노출 (Milky & Overexposed): 밝기를 훅 올리고 대비와 채도를 낮춤
+  // Y2K 특유의 살짝 흐릿한 느낌(low sharpness)을 위해 미세한 blur 추가
+  video.style.filter = on
+    ? `brightness(${1 + str * 0.35}) contrast(${1 - str * 0.15}) saturate(${1 - str * 0.25}) hue-rotate(5deg) blur(${str * 1.5}px)`
+    : '';
 }
 btnFilter.addEventListener('click',()=>{
   S.filterOn=!S.filterOn;
@@ -724,24 +728,28 @@ function capturePhoto(){
   return capCanvas.toDataURL('image/jpeg', .93);
 }
 
-function applyY2K(ctx,w,h){
-  const str=S.filterStr;
-  const id=ctx.getImageData(0,0,w,h), d=id.data;
-  for(let i=0;i<d.length;i+=4){
-    let r=d[i],g=d[i+1],b=d[i+2];
-    const gr=.299*r+.587*g+.114*b;
-    r=r*(1-.12*str)+gr*.12*str;
-    g=g*(1-.12*str)+gr*.12*str;
-    b=b*(1-.12*str)+gr*.12*str;
-    const c=1+str*.28, br=str*.045;
-    r=((r/255-.5)*c+.5+br)*255;
-    g=((g/255-.5)*c+.5+br)*255;
-    b=((b/255-.5)*(c*.95)+.5+br*.75)*255;
-    if(r>210) r=Math.min(255,r*(1+str*.05));
-    d[i]=Math.max(0,Math.min(255,r));
-    d[i+1]=Math.max(0,Math.min(255,g));
-    d[i+2]=Math.max(0,Math.min(255,b));
-  }
+function applyY2K(ctx, w, h){
+  const str = S.filterStr;
+  
+  // 1. 전체적으로 뽀얗고 생기있게 연한 피치핑크빛 베이스 깔기
+  ctx.fillStyle = `rgba(255, 235, 235, ${0.15 * str})`;
+  ctx.fillRect(0, 0, w, h);
+
+  // 2. 몽글몽글한 뽀샤시 (Soft Glow) 효과 더하기
+  ctx.save();
+  ctx.globalAlpha = 0.5 * str; // 뽀샤시 강도
+  ctx.globalCompositeOperation = 'screen'; 
+  ctx.filter = `blur(${5 * str}px)`; 
+  ctx.drawImage(ctx.canvas, 0, 0, w, h);
+  ctx.restore();
+
+  // 3. 사진 테두리를 어둡게 하는 대신, 화사하고 부드러운 하얀 빛으로 감싸주기
+  const softGlow = ctx.createRadialGradient(w/2, h/2, h*0.2, w/2, h/2, h*0.8);
+  softGlow.addColorStop(0, 'rgba(255,255,255,0)');
+  softGlow.addColorStop(1, `rgba(255,255,255,${0.25 * str})`);
+  ctx.fillStyle = softGlow;
+  ctx.fillRect(0, 0, w, h);
+}
   ctx.putImageData(id,0,0);
   // grain
   const grainCount=Math.floor(3500*str);
