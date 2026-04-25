@@ -614,40 +614,16 @@ async function initCam(){
 // ═══════════════════════════════════════════
 //  FILTER
 // ═══════════════════════════════════════════
-function applyY2K(ctx, w, h){
-  const str = S.filterStr;
-  
-  // 1. 밀키 톤 베이스 (Milky Tone)
-  // 투명한 화이트+연한 스카이블루를 깔아서 물 빠진 파스텔 느낌을 줌
-  ctx.fillStyle = `rgba(240, 248, 255, ${0.15 * str})`;
-  ctx.fillRect(0, 0, w, h);
-
-  // 2. 빛 번짐 & 소프트 포커스 (Light Bloom & Dreamy Soft Focus)
-  // 사진을 복사해서 아주 흐리게(blur) 만들고, 밝게(Screen) 겹쳐 올림
-  ctx.save();
-  ctx.globalCompositeOperation = 'screen'; 
-  ctx.globalAlpha = 0.65 * str; // 몽환적인 빛 번짐 강도
-  ctx.filter = `blur(${8 * str}px) brightness(1.1)`; 
-  ctx.drawImage(ctx.canvas, 0, 0, w, h);
-  ctx.restore();
-
-  // 3. 강한 디카 플래시 조명 (Strong Flash & Overexposed Highlights)
-  // 한가운데(얼굴 위치)에 강한 하얀색 빛을 쏴서 하이라이트를 확 날림
-  ctx.save();
-  ctx.globalCompositeOperation = 'overlay';
-  const flashLighting = ctx.createRadialGradient(w/2, h/2.5, 0, w/2, h/2.5, w * 0.7);
-  flashLighting.addColorStop(0, `rgba(255, 255, 255, ${0.5 * str})`); // 중앙은 과노출
-  flashLighting.addColorStop(1, 'rgba(255, 255, 255, 0)');
-  ctx.fillStyle = flashLighting;
-  ctx.fillRect(0, 0, w, h);
-  ctx.restore();
-
-  // 4. 레트로 디카 화질 (Y2K Digital Camera Aesthetic)
-  // 거친 노이즈가 아닌, 밝은 곳에서 생기는 아주 미세하고 부드러운 화이트 픽셀
-  ctx.fillStyle = `rgba(255, 255, 255, ${0.08 * str})`;
-  for(let i=0; i< (1000 * str); i++){
-    ctx.fillRect(Math.random()*w, Math.random()*h, 1, 1);
-  }
+function applyFilterUI(){
+  const on=S.filterOn;
+  document.getElementById('filterOverlay').classList.toggle('on',on);
+  document.getElementById('grainOverlay').classList.toggle('on',on);
+  document.getElementById('vignetteOverlay').classList.toggle('on',on);
+  document.getElementById('tsEl').classList.toggle('on',on);
+  const str=S.filterStr;
+  video.style.filter=on
+    ?`contrast(${1+str*.32}) brightness(${1+str*.1}) saturate(${1-str*.14})`
+    :'';
 }
 btnFilter.addEventListener('click',()=>{
   S.filterOn=!S.filterOn;
@@ -747,37 +723,41 @@ function capturePhoto(){
   
   return capCanvas.toDataURL('image/jpeg', .93);
 }
-
-function applyY2K(ctx, w, h){
-  const str = S.filterStr;
-  
-  // 1. 밀키 톤 베이스 (Milky Tone)
-  ctx.fillStyle = `rgba(240, 248, 255, ${0.15 * str})`;
-  ctx.fillRect(0, 0, w, h);
-
-  // 2. 빛 번짐 & 소프트 포커스 (Light Bloom & Dreamy Soft Focus)
-  ctx.save();
-  ctx.globalCompositeOperation = 'screen'; 
-  ctx.globalAlpha = 0.65 * str; // 몽환적인 빛 번짐 강도
-  ctx.filter = `blur(${8 * str}px) brightness(1.1)`; 
-  ctx.drawImage(ctx.canvas, 0, 0, w, h);
-  ctx.restore();
-
-  // 3. 강한 디카 플래시 조명 (Strong Flash & Overexposed Highlights)
-  ctx.save();
-  ctx.globalCompositeOperation = 'overlay';
-  const flashLighting = ctx.createRadialGradient(w/2, h/2.5, 0, w/2, h/2.5, w * 0.7);
-  flashLighting.addColorStop(0, `rgba(255, 255, 255, ${0.5 * str})`); 
-  flashLighting.addColorStop(1, 'rgba(255, 255, 255, 0)');
-  ctx.fillStyle = flashLighting;
-  ctx.fillRect(0, 0, w, h);
-  ctx.restore();
-
-  // 4. 레트로 디카 미세 노이즈 (Y2K Digital Camera Aesthetic)
-  ctx.fillStyle = `rgba(255, 255, 255, ${0.08 * str})`;
-  for(let i=0; i< (1000 * str); i++){
-    ctx.fillRect(Math.random()*w, Math.random()*h, 1, 1);
+function applyY2K(ctx,w,h){
+  const str=S.filterStr;
+  const id=ctx.getImageData(0,0,w,h), d=id.data;
+  for(let i=0;i<d.length;i+=4){
+    let r=d[i],g=d[i+1],b=d[i+2];
+    const gr=.299*r+.587*g+.114*b;
+    r=r*(1-.12*str)+gr*.12*str;
+    g=g*(1-.12*str)+gr*.12*str;
+    b=b*(1-.12*str)+gr*.12*str;
+    const c=1+str*.28, br=str*.045;
+    r=((r/255-.5)*c+.5+br)*255;
+    g=((g/255-.5)*c+.5+br)*255;
+    b=((b/255-.5)*(c*.95)+.5+br*.75)*255;
+    if(r>210) r=Math.min(255,r*(1+str*.05));
+    d[i]=Math.max(0,Math.min(255,r));
+    d[i+1]=Math.max(0,Math.min(255,g));
+    d[i+2]=Math.max(0,Math.min(255,b));
   }
+  ctx.putImageData(id,0,0);
+  // grain
+  const grainCount=Math.floor(3500*str);
+  for(let i=0;i<grainCount;i++){
+    ctx.fillStyle=`rgba(255,255,255,${Math.random()*.065*str})`;
+    ctx.fillRect(Math.random()*w,Math.random()*h,Math.random()*1.4,Math.random()*1.4);
+  }
+  // center highlight (flash simulation)
+  const grd=ctx.createRadialGradient(w/2,h*.32,0,w/2,h*.32,w*.48*str);
+  grd.addColorStop(0,`rgba(255,255,245,${.16*str})`);
+  grd.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=grd; ctx.fillRect(0,0,w,h);
+  // vignette
+  const vig=ctx.createRadialGradient(w/2,h/2,h*.27,w/2,h/2,h*.78);
+  vig.addColorStop(0,'rgba(0,0,0,0)');
+  vig.addColorStop(1,`rgba(0,0,12,${.68*str})`);
+  ctx.fillStyle=vig; ctx.fillRect(0,0,w,h);
 }
 
 // ═══════════════════════════════════════════
@@ -816,26 +796,9 @@ async function shootSequence(indices){
 
   for(const idx of indices){
     S.currentShot=idx; updateProgress();
-    
-    // 1. 카운트다운 진행
     await countdown(5);
-    
-    // 2. 사진 찍기 직전에 화면을 하얗게 만들어서 얼굴에 빛 쏘기!
-    if(S.flashOn) {
-      flashEl.classList.add('flash');
-      await sleep(150); // 하얀 빛이 얼굴에 닿을 시간 아주 잠깐(0.15초) 기다림
-    }
-
-    // 3. 얼굴이 환해진 그 순간 찰칵! 찍기
     const url=capturePhoto();
-    playShutter();
-
-    // 4. 플래시 효과 끄기
-    if(S.flashOn) {
-      flashEl.classList.remove('flash');
-      await sleep(80); // 눈부심 잔상 대기
-    }
-    
+    await triggerFlash(); playShutter();
     S.photos[idx]=url; updateThumbs(); updateProgress();
     await sleep(480);
   }
@@ -849,6 +812,7 @@ async function shootSequence(indices){
     await sleep(280); await showResult();
   }
 }
+
 function startRetake(idx){
   if(S.shooting) return;
   S.retakeIdx=idx;
